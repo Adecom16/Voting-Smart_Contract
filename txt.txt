@@ -1,0 +1,95 @@
+
+const { expect } = require("chai");
+
+describe("Voting", function () {
+  let Voting;
+  let voting;
+  let admin;
+  let voter1;
+  let voter2;
+
+
+  beforeEach(async function () {
+    Voting = await ethers.getContractFactory("Voting");
+    [admin, voter1, voter2] = await ethers.getSigners();
+    voting = await Voting.deploy();
+    // await voting.waitforDeployment();
+  });
+
+
+  it("should allow admin to add voters", async function () {
+    await voting.connect(admin).addVoters([voter1.address, voter2.address]);
+    expect(await voting.voters(voter1.address)).to.equal(true);
+    expect(await voting.voters(voter2.address)).to.equal(true);
+  });
+
+ 
+  it("should allow admin to create a ballot", async function () {
+    await voting
+      .connect(admin)
+      .createBallot("Ballot 1", ["Choice 1", "Choice 2"], 3600); // 1 hour duration
+    const ballot = await voting.ballots(0);
+    console.log(ballot)
+    expect(ballot.name).to.equal("Ballot 1");
+    // expect(ballot.choices.length).to.equal(2);
+    expect(ballot.end).to.be.above(0);
+    
+  });
+
+  // voting
+it("should allow voters to cast their votes", async function () {
+  this.timeout(60000); // Extend the timeout to 60 seconds if needed
+
+  try {
+    // Add voters and create a ballot
+    await voting.connect(admin).addVoters([voter1.address]);
+    await voting
+      .connect(admin)
+      .createBallot("Ballot 1", ["Choice 1", "Choice 2"]);
+
+    // Voter casts their vote
+    await voting.connect(voter1).vote(0, 0);
+
+    let ballotEnded = false;
+    while (!ballotEnded) {
+      // Retrieve the end timestamp of the ballot
+      const endTimestamp = await voting.ballots(0).end;
+
+      // Check if the current time has exceeded the end time of the ballot
+      if (Date.now() >= endTimestamp * 1000) {
+        ballotEnded = true;
+      } else {
+        // Wait for a short interval before checking again
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second
+      }
+    }
+
+    // Retrieve the results of the ballot
+    const choices = await voting.results(0);
+
+    // Assert the number of votes for each choice
+    expect(choices[0].votes).to.equal(1);
+    expect(choices[1].votes).to.equal(0);
+  } catch (error) {
+    // Handle any errors that occur during the test
+    console.error("Error in test:", error);
+    throw error; // Rethrow the error to fail the test
+  }
+});
+
+
+
+  //  viewing results
+it("should allow viewing results after the end of the ballot", async function () {
+  await voting.connect(admin).addVoters([voter1.address]);
+  await voting
+    .connect(admin)
+    .createBallot("Ballot 1", ["Choice 1", "Choice 2"], 3600); // 1 hour duration
+  await new Promise((resolve) => setTimeout(resolve, 3600000)); // Wait for 1 hour
+  const choices = await voting.results(0);
+  expect(choices.length).to.equal(2);
+});
+;
+
+
+});
